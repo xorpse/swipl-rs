@@ -29,6 +29,8 @@
 //! Third, swipl-rs supports construction of complex terms through the
 //! [term!](crate::prelude::term!) macro. Consider using this macro when
 //! you have to produce deeply nested types.
+use crate::prelude::Module;
+
 use super::atom::*;
 use super::context::*;
 use super::engine::*;
@@ -87,6 +89,37 @@ pub enum TermType {
 impl<'a> Term<'a> {
     pub(crate) unsafe fn new(term: term_t, origin: TermOrigin<'a>) -> Self {
         Term { term, origin }
+    }
+
+    fn assert_in_module(&self, module: Option<Module>, options: u32) -> PrologResult<()> {
+        self.assert_term_handling_possible();
+
+        let module = module.unwrap_or_else(|| Module::new("user"));
+        let result = unsafe { PL_assert(self.term, module.module_ptr(), options as _) != 0 };
+
+        if unsafe { pl_default_exception() != 0 } {
+            Err(PrologError::Exception)
+        } else if result {
+            Ok(())
+        } else {
+            Err(PrologError::Failure)
+        }
+    }
+
+    pub fn asserta_in_module(&self, module: Option<Module>) -> PrologResult<()> {
+        self.assert_in_module(module, PL_ASSERTA)
+    }
+
+    pub fn asserta(&self) -> PrologResult<()> {
+        self.asserta_in_module(None)
+    }
+
+    pub fn assertz_in_module(&self, module: Option<Module>) -> PrologResult<()> {
+        self.assert_in_module(module, PL_ASSERTZ)
+    }
+
+    pub fn assertz(&self) -> PrologResult<()> {
+        self.assertz_in_module(None)
     }
 
     /// Return the underying `term_t` from the SWI-Prolog fli.
